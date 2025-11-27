@@ -5,15 +5,11 @@ import math
 from fpdf import FPDF
 from datetime import datetime
 import os
-# Nova importação para o banco de dados
 from streamlit_gsheets import GSheetsConnection
 
 # ==============================================================================
 # 1. BANCO DE DADOS COMPLETO (APOLLO)
 # ==============================================================================
-# ... (MANTENHA TODAS AS LISTAS DE PLACAS, BOMBAS E INVERSORES IGUAIS ANTES) ...
-# Para economizar espaço aqui, estou assumindo que as listas DB_PLACAS, 
-# DB_BOMBAS_SUBMERSA, etc., continuam no código exatamente como antes.
 
 # --- Módulos Fotovoltaicos ---
 DB_PLACAS = [
@@ -120,43 +116,6 @@ DB_BOMBAS_SUBMERSA = [
     {'CV': 390.0, 'KW': 292.5, 'I_220': 1070.0, 'I_380': 618.5},
     {'CV': 395.0, 'KW': 296.25, 'I_220': 1080.38, 'I_380': 624.5},
     {'CV': 400.0, 'KW': 300.0, 'I_220': 1091.63, 'I_380': 631.0}
-]
-
-# --- Bombas Periféricas ---
-DB_BOMBAS_PERIFERICA = [
-    {'CV': 0.16, 'KW': 0.12, 'I_220': 0.93, 'I_380': 0.46},
-    {'CV': 0.25, 'KW': 0.18, 'I_220': 1.16, 'I_380': 0.58},
-    {'CV': 0.33, 'KW': 0.25, 'I_220': 1.39, 'I_380': 0.69},
-    {'CV': 0.5, 'KW': 0.37, 'I_220': 1.85, 'I_380': 0.93},
-    {'CV': 0.75, 'KW': 0.55, 'I_220': 2.62, 'I_380': 1.31},
-    {'CV': 1.0, 'KW': 0.75, 'I_220': 3.47, 'I_380': 1.74},
-    {'CV': 1.5, 'KW': 1.1, 'I_220': 4.86, 'I_380': 2.43},
-    {'CV': 2.0, 'KW': 1.5, 'I_220': 6.48, 'I_380': 3.24},
-    {'CV': 3.0, 'KW': 2.2, 'I_220': 9.15, 'I_380': 4.57},
-    {'CV': 4.0, 'KW': 3.0, 'I_220': 12.51, 'I_380': 6.25},
-    {'CV': 5.0, 'KW': 3.7, 'I_220': 14.78, 'I_380': 7.39},
-    {'CV': 6.0, 'KW': 4.5, 'I_220': 17.76, 'I_380': 8.88},
-    {'CV': 7.5, 'KW': 5.5, 'I_220': 22.51, 'I_380': 11.26},
-    {'CV': 10.0, 'KW': 7.5, 'I_220': 28.95, 'I_380': 14.47},
-    {'CV': 12.5, 'KW': 9.2, 'I_220': 34.51, 'I_380': 17.25},
-    {'CV': 15.0, 'KW': 11.0, 'I_220': 42.61, 'I_380': 21.31},
-    {'CV': 20.0, 'KW': 15.0, 'I_220': 57.67, 'I_380': 28.83},
-    {'CV': 25.0, 'KW': 18.5, 'I_220': 70.41, 'I_380': 35.2},
-    {'CV': 30.0, 'KW': 22.0, 'I_220': 84.77, 'I_380': 42.38},
-    {'CV': 40.0, 'KW': 30.0, 'I_220': 114.64, 'I_380': 57.32},
-    {'CV': 50.0, 'KW': 37.0, 'I_220': 140.58, 'I_380': 70.29},
-    {'CV': 60.0, 'KW': 45.0, 'I_220': 169.99, 'I_380': 85.0},
-    {'CV': 75.0, 'KW': 55.0, 'I_220': 200.57, 'I_380': 100.28},
-    {'CV': 100.0, 'KW': 75.0, 'I_220': 277.92, 'I_380': 138.96},
-    {'CV': 125.0, 'KW': 90.0, 'I_220': 326.56, 'I_380': 163.28},
-    {'CV': 150.0, 'KW': 110.0, 'I_220': 396.04, 'I_380': 198.02},
-    {'CV': 175.0, 'KW': 132.0, 'I_220': 472.46, 'I_380': 236.23},
-    {'CV': 200.0, 'KW': 150.0, 'I_220': 541.94, 'I_380': 270.97},
-    {'CV': 250.0, 'KW': 185.0, 'I_220': 660.06, 'I_380': 330.03},
-    {'CV': 270.0, 'KW': 200.0, 'I_220': 704.06, 'I_380': 352.03},
-    {'CV': 300.0, 'KW': 220.0, 'I_220': 775.86, 'I_380': 387.93},
-    {'CV': 350.0, 'KW': 260.0, 'I_220': 917.14, 'I_380': 458.57},
-    {'CV': 400.0, 'KW': 300.0, 'I_220': 1046.83, 'I_380': 523.42},
 ]
 
 # --- Inversores Apollo ---
@@ -266,7 +225,6 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
     pdf = PropostaPDF()
     pdf.add_page()
     
-    # Tratamento de campos vazios para o PDF
     nome = nome_cliente if nome_cliente else "Cliente não identificado"
     tel = tel_cliente if tel_cliente else "-"
     email = email_cliente if email_cliente else "Não informado"
@@ -331,28 +289,24 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
 # ==============================================================================
 
 # --- DATABASE CONNECTION (Google Sheets) ---
-# Tenta conectar se as credenciais existirem, senão roda sem banco
 conn = None
 try:
-    if "gsheets" in st.secrets.get("connections", {}):
-        from streamlit_gsheets import GSheetsConnection
-        conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception:
-    pass # Roda apenas localmente sem salvar
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error(f"Erro de Conexão com Planilha: {e}")
+    conn = None
 
 def salvar_lead(dados):
-    """Salva os dados na planilha se a conexão estiver ativa"""
     if conn:
         try:
-            # Lê dados existentes
-            df_existente = conn.read()
-            # Adiciona nova linha
+            # FIX: TTL=5 forces fresh read from Sheets API to avoid overwriting old cache
+            df_existente = conn.read(ttl=5)
             df_novo = pd.DataFrame([dados])
             df_final = pd.concat([df_existente, df_novo], ignore_index=True)
-            # Atualiza planilha
             conn.update(data=df_final)
+            st.toast("Dados salvos no banco de dados!", icon="✅")
         except Exception as e:
-            st.error(f"Erro ao salvar no banco de dados: {e}")
+            st.error(f"Erro ao salvar: {e}")
 
 st.set_page_config(page_title="Dimensionamento Solar Apollo", layout="wide", page_icon="☀️")
 
@@ -498,33 +452,32 @@ if st.session_state['calculou']:
             with cc3:
                 email_cliente = st.text_input("Email", key="cli_email")
             
-            st.caption("Preencha os dados acima para incluir na proposta.")
-
-            if arranjo_rec:
-                dados_bomba_pdf = {'Tipo': tipo_bomba, 'CV': potencia_cv, 'kW': potencia_bomba_kw, 'Tensao': tensao_bomba, 'Corrente': corrente_bomba}
-                
-                # Gera o PDF usando as variáveis capturadas agora
-                pdf_bytes = gerar_pdf(nome_cliente, tel_cliente, email_cliente, dados_bomba_pdf, inversor_eleito, arranjo_rec, painel_sel, aviso_adaptacao)
-                
-                # Botão de Download que também salva no banco (se configurado)
-                btn = st.download_button(
-                    label="📄 Baixar Proposta em PDF",
-                    data=pdf_bytes,
-                    file_name=f"Proposta_Apollo_{nome_cliente.replace(' ','_') if nome_cliente else 'Cliente'}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-                
-                if btn and conn:
-                    # Salva Lead se clicou no botão e tem conexão
-                    lead_data = {
-                        "Data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "Cliente": nome_cliente,
-                        "Telefone": tel_cliente,
-                        "Email": email_cliente,
-                        "Bomba_CV": potencia_cv,
-                        "Inversor": inversor_eleito['Modelo'],
-                        "Placas": arranjo_rec['total_placas'],
-                        "Potencia_Pico_KW": (arranjo_rec['total_placas'] * painel_sel['P_max'])/1000
-                    }
-                    salvar_lead(lead_data)
+            # Validação: Só mostra o botão se os campos estiverem preenchidos
+            if nome_cliente and tel_cliente and email_cliente:
+                if arranjo_rec:
+                    dados_bomba_pdf = {'Tipo': tipo_bomba, 'CV': potencia_cv, 'kW': potencia_bomba_kw, 'Tensao': tensao_bomba, 'Corrente': corrente_bomba}
+                    
+                    pdf_bytes = gerar_pdf(nome_cliente, tel_cliente, email_cliente, dados_bomba_pdf, inversor_eleito, arranjo_rec, painel_sel, aviso_adaptacao)
+                    
+                    btn = st.download_button(
+                        label="📄 Baixar Proposta em PDF",
+                        data=pdf_bytes,
+                        file_name=f"Proposta_Apollo_{nome_cliente.replace(' ','_') if nome_cliente else 'Cliente'}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                    if btn and conn:
+                        lead_data = {
+                            "Data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Cliente": nome_cliente,
+                            "Telefone": tel_cliente,
+                            "Email": email_cliente,
+                            "Bomba_CV": potencia_cv,
+                            "Inversor": inversor_eleito['Modelo'],
+                            "Placas": arranjo_rec['total_placas'],
+                            "Potencia_Pico_KW": (arranjo_rec['total_placas'] * painel_sel['P_max'])/1000
+                        }
+                        salvar_lead(lead_data)
+            else:
+                st.warning("⚠️ Preencha todos os dados do cliente (Nome, Telefone, Email) para gerar a proposta.")

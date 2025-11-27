@@ -5,10 +5,15 @@ import math
 from fpdf import FPDF
 from datetime import datetime
 import os
+# Nova importação para o banco de dados
+from streamlit_gsheets import GSheetsConnection
 
 # ==============================================================================
 # 1. BANCO DE DADOS COMPLETO (APOLLO)
 # ==============================================================================
+# ... (MANTENHA TODAS AS LISTAS DE PLACAS, BOMBAS E INVERSORES IGUAIS ANTES) ...
+# Para economizar espaço aqui, estou assumindo que as listas DB_PLACAS, 
+# DB_BOMBAS_SUBMERSA, etc., continuam no código exatamente como antes.
 
 # --- Módulos Fotovoltaicos ---
 DB_PLACAS = [
@@ -197,10 +202,9 @@ df_inversores = pd.DataFrame(DB_INVERSORES)
 
 class PropostaPDF(FPDF):
     def header(self):
-        # Tenta colocar logo se existir
         if os.path.exists('logo.png'):
             try:
-                self.image('logo.png', 10, 8, 40) # Ajuste de tamanho e posição
+                self.image('logo.png', 10, 8, 40)
             except: pass
         
         self.set_font('Arial', 'B', 15)
@@ -218,7 +222,7 @@ class PropostaPDF(FPDF):
 
     def chapter_title(self, label):
         self.set_font('Arial', 'B', 12)
-        self.set_fill_color(230, 230, 230) # Cinza claro
+        self.set_fill_color(230, 230, 230)
         self.cell(0, 8, f"  {label}", 0, 1, 'L', 1)
         self.ln(2)
 
@@ -262,7 +266,7 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
     pdf = PropostaPDF()
     pdf.add_page()
     
-    # Tratamento de campos vazios
+    # Tratamento de campos vazios para o PDF
     nome = nome_cliente if nome_cliente else "Cliente não identificado"
     tel = tel_cliente if tel_cliente else "-"
     email = email_cliente if email_cliente else "Não informado"
@@ -326,9 +330,32 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
 # 3. INTERFACE STREAMLIT
 # ==============================================================================
 
+# --- DATABASE CONNECTION (Google Sheets) ---
+# Tenta conectar se as credenciais existirem, senão roda sem banco
+conn = None
+try:
+    if "gsheets" in st.secrets.get("connections", {}):
+        from streamlit_gsheets import GSheetsConnection
+        conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception:
+    pass # Roda apenas localmente sem salvar
+
+def salvar_lead(dados):
+    """Salva os dados na planilha se a conexão estiver ativa"""
+    if conn:
+        try:
+            # Lê dados existentes
+            df_existente = conn.read()
+            # Adiciona nova linha
+            df_novo = pd.DataFrame([dados])
+            df_final = pd.concat([df_existente, df_novo], ignore_index=True)
+            # Atualiza planilha
+            conn.update(data=df_final)
+        except Exception as e:
+            st.error(f"Erro ao salvar no banco de dados: {e}")
+
 st.set_page_config(page_title="Dimensionamento Solar Apollo", layout="wide", page_icon="☀️")
 
-# --- LOGO NA INTERFACE ---
 if os.path.exists('logo.png'):
     st.image('logo.png', width=200)
 
@@ -336,14 +363,13 @@ st.title("☀️ Sistema de Dimensionamento Solar - Apollo")
 st.markdown("Selecione o modelo da bomba e do painel conforme catálogo.")
 st.markdown("---")
 
-# --- BLOCO 1: SELEÇÃO DA BOMBA ---
+# --- 1. SELEÇÃO DA BOMBA ---
 st.subheader("1. Seleção da Bomba")
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
     tipo_bomba = st.radio("Tipo de Sistema", ["Submersa", "Superfície / Periférica"])
 
-# Carrega lista baseada no tipo
 if tipo_bomba == "Submersa":
     lista_bombas = DB_BOMBAS_SUBMERSA
 else:
@@ -360,7 +386,6 @@ with c2:
 with c3:
     tensao_bomba = st.selectbox("Tensão de Operação", ["220V", "380V"])
 
-# Busca corrente automaticamente
 bomba_selecionada = next((b for b in lista_bombas if b['CV'] == potencia_cv), None)
 corrente_padrao = 0.0
 if bomba_selecionada:
@@ -372,7 +397,7 @@ if bomba_selecionada:
 with c4:
     corrente_bomba = st.number_input("Corrente Nominal (A)", value=corrente_padrao, step=0.1, format="%.2f")
 
-# --- BLOCO 2: SELEÇÃO DO PAINEL ---
+# --- 2. SELEÇÃO DO PAINEL ---
 st.divider()
 st.subheader("2. Seleção do Painel Solar")
 cp1, cp2 = st.columns([1, 3])
@@ -385,7 +410,7 @@ with cp1:
 with cp2:
     st.info(f"**Detalhes do Painel:** Pmax: {painel_sel['P_max']}W | Vmp: {painel_sel['V_mp']}V | Imp: {painel_sel['I_mp']}A | Voc: {painel_sel['V_oc']}V")
 
-# --- CÁLCULO E ESTADO ---
+# --- CÁLCULO ---
 if 'calculou' not in st.session_state:
     st.session_state['calculou'] = False
 
@@ -394,33 +419,30 @@ st.divider()
 if st.button("🚀 Calcular Dimensionamento", use_container_width=True):
     st.session_state['calculou'] = True
 
-# --- EXIBIÇÃO DE RESULTADOS E INPUTS FINAIS ---
 if st.session_state['calculou']:
     
     potencia_bomba_kw = potencia_cv * 0.736
     corrente_com_folga = corrente_bomba * 1.10
     
-    # =========================================================================
-    # LÓGICA DE SELEÇÃO DO INVERSOR (220V ATÉ 2.2kW)
-    # =========================================================================
+    # === LÓGICA DE INVERSORES (AJUSTADA) ===
     aviso_adaptacao = False
     
     if tensao_bomba == "220V":
         if potencia_bomba_kw <= 2.2:
-            # Regra Padrão: Usa inversores da linha 220V (SS2)
+            # Até 2.2kW usa linha 220V nativa (SS2)
             df_filtrado = df_inversores[df_inversores['Tensao'] == '220V'].copy()
         else:
-            # Regra Alta Potência: Usa inversores da linha 380V (Série 4)
+            # Acima de 2.2kW usa linha 380V (Série 4) adaptada pela corrente
             df_filtrado = df_inversores[df_inversores['Tensao'] == '380V'].copy()
             aviso_adaptacao = True
     else:
-        # Regra Padrão 380V
+        # 380V padrão
         df_filtrado = df_inversores[df_inversores['Tensao'] == '380V'].copy()
     
     if df_filtrado.empty:
          st.error("Erro no banco de dados de inversores.")
     else:
-        # Busca Inversor (Potência e Corrente)
+        # Busca pelo inversor que atende a potência E a corrente
         inversores = df_filtrado[
             (df_filtrado['Potencia_KW'] >= potencia_bomba_kw) &
             (df_filtrado['Corrente_Nominal_A'] >= corrente_com_folga)
@@ -432,15 +454,15 @@ if st.session_state['calculou']:
         else:
             inversor_eleito = inversores.iloc[0]
             
-            # 2. Cálculo Solar (Novos Fatores: 1.5x e 2.5x)
+            # Cálculo Solar
             pot_min_w = (potencia_bomba_kw * 1000) * 1.5
             pot_rec_w = (potencia_bomba_kw * 1000) * 2.5
             
             arranjo_min = calcular_arranjo_otimizado(pot_min_w, tensao_bomba, painel_sel)
             arranjo_rec = calcular_arranjo_otimizado(pot_rec_w, tensao_bomba, painel_sel)
             
-            # --- RESULTADOS TÉCNICOS ---
-            st.success(f"✅ Sistema Apollo Dimensionado com Sucesso!")
+            # --- RESULTADOS ---
+            st.success(f"✅ Sistema Apollo Dimensionado!")
             
             col_res1, col_res2 = st.columns(2)
             
@@ -451,34 +473,23 @@ if st.session_state['calculou']:
                 st.caption(f"Considerando folga de 10% ({corrente_com_folga:.2f}A)")
                 
                 if aviso_adaptacao:
-                    st.warning("ℹ️ Inversor 380V selecionado para bomba 220V de alta potência. Requer parametrização.")
+                    st.warning("ℹ️ Inversor 380V selecionado para bomba de alta potência em 220V. Requer parametrização de tensão de saída.")
             
             with col_res2:
-                # Exibe Mínimo (1.5x)
-                st.markdown("### ☀️ Mínimo (Fator 1.5x)")
+                st.markdown("### ☀️ Mínimo (1.5x)")
                 if arranjo_min:
                     tot_min = arranjo_min['total_placas']
                     st.write(f"**{tot_min}x Painéis** ({arranjo_min['strings']} strings de {arranjo_min['placas_por_string']})")
-                    st.write(f"Potência: {(tot_min * painel_sel['P_max'])/1000:.2f} kWp")
-                else:
-                    st.error("Erro no cálculo mínimo.")
-
-                st.divider()
-
-                # Exibe Recomendado (2.5x)
-                st.markdown("### 🌟 Recomendado (Fator 2.5x)")
+                
+                st.markdown("### 🌟 Recomendado (2.5x)")
                 if arranjo_rec:
                     tot_rec = arranjo_rec['total_placas']
                     st.write(f"**{tot_rec}x Painéis** ({arranjo_rec['strings']} strings de {arranjo_rec['placas_por_string']})")
-                    st.write(f"Potência: {(tot_rec * painel_sel['P_max'])/1000:.2f} kWp")
-                else:
-                    st.error("Erro no cálculo recomendado.")
 
-            # --- DADOS DE CONTATO E PDF ---
+            # --- LEAD E DOWNLOAD ---
             st.divider()
             st.markdown("### 👤 Dados do Cliente para Proposta")
             
-            # USO DE KEYS para evitar reset
             cc1, cc2, cc3 = st.columns(3)
             with cc1:
                 nome_cliente = st.text_input("Nome do Cliente", key="cli_nome")
@@ -492,14 +503,28 @@ if st.session_state['calculou']:
             if arranjo_rec:
                 dados_bomba_pdf = {'Tipo': tipo_bomba, 'CV': potencia_cv, 'kW': potencia_bomba_kw, 'Tensao': tensao_bomba, 'Corrente': corrente_bomba}
                 
-                # O PDF é gerado dentro do if do botão, pegando os valores mais recentes
-                # Passa a flag aviso_adaptacao para o PDF também
+                # Gera o PDF usando as variáveis capturadas agora
                 pdf_bytes = gerar_pdf(nome_cliente, tel_cliente, email_cliente, dados_bomba_pdf, inversor_eleito, arranjo_rec, painel_sel, aviso_adaptacao)
                 
-                st.download_button(
+                # Botão de Download que também salva no banco (se configurado)
+                btn = st.download_button(
                     label="📄 Baixar Proposta em PDF",
                     data=pdf_bytes,
                     file_name=f"Proposta_Apollo_{nome_cliente.replace(' ','_') if nome_cliente else 'Cliente'}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
+                
+                if btn and conn:
+                    # Salva Lead se clicou no botão e tem conexão
+                    lead_data = {
+                        "Data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Cliente": nome_cliente,
+                        "Telefone": tel_cliente,
+                        "Email": email_cliente,
+                        "Bomba_CV": potencia_cv,
+                        "Inversor": inversor_eleito['Modelo'],
+                        "Placas": arranjo_rec['total_placas'],
+                        "Potencia_Pico_KW": (arranjo_rec['total_placas'] * painel_sel['P_max'])/1000
+                    }
+                    salvar_lead(lead_data)

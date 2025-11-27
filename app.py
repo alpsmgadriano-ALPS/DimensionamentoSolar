@@ -154,7 +154,7 @@ DB_BOMBAS_PERIFERICA = [
     {'CV': 400.0, 'KW': 300.0, 'I_220': 1046.83, 'I_380': 523.42},
 ]
 
-# --- Inversores Apollo (Atualizado: Removido 4kW 220V SS2) ---
+# --- Inversores Apollo ---
 DB_INVERSORES = [
     # SS2 (220V - Apenas até 2.2kW)
     {'Modelo': 'FU9000SI-0R7G-SS2', 'Potencia_KW': 0.75, 'Corrente_Nominal_A': 7.2,  'Tensao': '220V', 'Max_DC': 400},
@@ -262,11 +262,16 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
     pdf = PropostaPDF()
     pdf.add_page()
     
+    # Tratamento de campos vazios
+    nome = nome_cliente if nome_cliente else "Cliente não identificado"
+    tel = tel_cliente if tel_cliente else "-"
+    email = email_cliente if email_cliente else "Não informado"
+
     # 1. Dados do Projeto
     pdf.chapter_title("1. Dados do Cliente e Projeto")
-    texto_bomba = (f"Cliente: {nome_cliente}\n"
-                   f"Telefone: {tel_cliente}\n"
-                   f"Email: {email_cliente}\n"
+    texto_bomba = (f"Cliente: {nome}\n"
+                   f"Telefone: {tel}\n"
+                   f"Email: {email}\n"
                    f"Data: {datetime.now().strftime('%d/%m/%Y')}\n\n"
                    f"Tipo de Bomba: {bomba_dados['Tipo']}\n"
                    f"Potência: {bomba_dados['CV']} CV ({bomba_dados['kW']:.2f} kW)\n"
@@ -396,16 +401,16 @@ if st.session_state['calculou']:
     corrente_com_folga = corrente_bomba * 1.10
     
     # =========================================================================
-    # LÓGICA DE SELEÇÃO DO INVERSOR (NOVA REGRA)
+    # LÓGICA DE SELEÇÃO DO INVERSOR (220V ATÉ 2.2kW)
     # =========================================================================
     aviso_adaptacao = False
     
     if tensao_bomba == "220V":
         if potencia_bomba_kw <= 2.2:
-            # Regra Padrão: Usa inversores da linha 220V
+            # Regra Padrão: Usa inversores da linha 220V (SS2)
             df_filtrado = df_inversores[df_inversores['Tensao'] == '220V'].copy()
         else:
-            # Regra Alta Potência: Usa inversores da linha 380V dimensionados pela corrente
+            # Regra Alta Potência: Usa inversores da linha 380V (Série 4)
             df_filtrado = df_inversores[df_inversores['Tensao'] == '380V'].copy()
             aviso_adaptacao = True
     else:
@@ -446,7 +451,7 @@ if st.session_state['calculou']:
                 st.caption(f"Considerando folga de 10% ({corrente_com_folga:.2f}A)")
                 
                 if aviso_adaptacao:
-                    st.warning("ℹ️ Inversor da linha 380V selecionado para bomba de alta potência em 220V. Parametrização necessária.")
+                    st.warning("ℹ️ Inversor 380V selecionado para bomba 220V de alta potência. Requer parametrização.")
             
             with col_res2:
                 # Exibe Mínimo (1.5x)
@@ -487,7 +492,7 @@ if st.session_state['calculou']:
             if arranjo_rec:
                 dados_bomba_pdf = {'Tipo': tipo_bomba, 'CV': potencia_cv, 'kW': potencia_bomba_kw, 'Tensao': tensao_bomba, 'Corrente': corrente_bomba}
                 
-                # Gera PDF somente quando o botão de download é pressionado
+                # O PDF é gerado dentro do if do botão, pegando os valores mais recentes
                 # Passa a flag aviso_adaptacao para o PDF também
                 pdf_bytes = gerar_pdf(nome_cliente, tel_cliente, email_cliente, dados_bomba_pdf, inversor_eleito, arranjo_rec, painel_sel, aviso_adaptacao)
                 

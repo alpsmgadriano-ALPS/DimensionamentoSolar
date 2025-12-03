@@ -157,9 +157,9 @@ DB_BOMBAS_PERIFERICA = [
 # --- Inversores Apollo ---
 DB_INVERSORES = [
     # SS2 (220V - Apenas até 2.2kW)
-    {'Modelo': 'FU9000SI-0R7G-SS2', 'Potencia_KW': 0.75, 'Corrente_Nominal_A': 7.2,  'Tensao': '220V', 'Max_DC': 400},
-    {'Modelo': 'FU9000SI-1R5G-SS2', 'Potencia_KW': 1.5,  'Corrente_Nominal_A': 10.2, 'Tensao': '220V', 'Max_DC': 400},
-    {'Modelo': 'FU9000SI-2R2G-SS2', 'Potencia_KW': 2.2,  'Corrente_Nominal_A': 14.0, 'Tensao': '220V', 'Max_DC': 400},
+    {'Modelo': 'FU9000SI-0R7G-SS2', 'Potencia_KW': 0.75, 'Corrente_Nominal_A': 4.5,  'Tensao': '220V', 'Max_DC': 400},
+    {'Modelo': 'FU9000SI-1R5G-SS2', 'Potencia_KW': 1.5,  'Corrente_Nominal_A': 7.0, 'Tensao': '220V', 'Max_DC': 400},
+    {'Modelo': 'FU9000SI-2R2G-SS2', 'Potencia_KW': 2.2,  'Corrente_Nominal_A': 10.0, 'Tensao': '220V', 'Max_DC': 400},
     
     # Série 4 (380V - Usada para 380V e para 220V > 2.2kW)
     {'Modelo': 'FU9000SI-0R7G-4',   'Potencia_KW': 0.75, 'Corrente_Nominal_A': 2.5,  'Tensao': '380V', 'Max_DC': 800},
@@ -553,3 +553,4 @@ if st.session_state['calculou']:
                     mime="application/pdf",
                     use_container_width=True
                 )
+

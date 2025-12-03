@@ -152,15 +152,14 @@ DB_BOMBAS_PERIFERICA = [
     {'CV': 270.0, 'KW': 200.0, 'I_220': 704.06, 'I_380': 352.03},
     {'CV': 300.0, 'KW': 220.0, 'I_220': 775.86, 'I_380': 387.93},
     {'CV': 350.0, 'KW': 260.0, 'I_220': 917.14, 'I_380': 458.57},
-    {'CV': 400.0, 'KW': 300.0, 'I_220': 1046.83, 'I_380': 523.42},
-]
+    {'CV': 400.0, 'KW': 300.0, 'I_220': 1046.83, 'I_380': 523.42}]
 
 # --- Inversores Apollo ---
 DB_INVERSORES = [
     # SS2 (220V - Apenas até 2.2kW)
-    {'Modelo': 'FU9000SI-0R7G-SS2', 'Potencia_KW': 0.75, 'Corrente_Nominal_A': 4.5,  'Tensao': '220V', 'Max_DC': 400},
-    {'Modelo': 'FU9000SI-1R5G-SS2', 'Potencia_KW': 1.5,  'Corrente_Nominal_A': 7.0, 'Tensao': '220V', 'Max_DC': 400},
-    {'Modelo': 'FU9000SI-2R2G-SS2', 'Potencia_KW': 2.2,  'Corrente_Nominal_A': 10.0, 'Tensao': '220V', 'Max_DC': 400},
+    {'Modelo': 'FU9000SI-0R7G-SS2', 'Potencia_KW': 0.75, 'Corrente_Nominal_A': 7.2,  'Tensao': '220V', 'Max_DC': 400},
+    {'Modelo': 'FU9000SI-1R5G-SS2', 'Potencia_KW': 1.5,  'Corrente_Nominal_A': 10.2, 'Tensao': '220V', 'Max_DC': 400},
+    {'Modelo': 'FU9000SI-2R2G-SS2', 'Potencia_KW': 2.2,  'Corrente_Nominal_A': 14.0, 'Tensao': '220V', 'Max_DC': 400},
     
     # Série 4 (380V - Usada para 380V e para 220V > 2.2kW)
     {'Modelo': 'FU9000SI-0R7G-4',   'Potencia_KW': 0.75, 'Corrente_Nominal_A': 2.5,  'Tensao': '380V', 'Max_DC': 800},
@@ -258,11 +257,10 @@ def calcular_arranjo_otimizado(potencia_necessaria_watts, tensao_sistema, placa_
                     if sobra == 0: break
     return melhor_arranjo
 
-def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, arranjo_rec, placa_sel, aviso_adaptacao=False):
+def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, arranjo_rec, placa_sel, aviso_adaptacao, usa_booster):
     pdf = PropostaPDF()
     pdf.add_page()
     
-    # Tratamento de campos vazios para o PDF
     nome = nome_cliente if nome_cliente else "Cliente não identificado"
     tel = tel_cliente if tel_cliente else "-"
     email = email_cliente if email_cliente else "Não informado"
@@ -296,11 +294,17 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
     if arranjo_rec:
         tot = arranjo_rec['total_placas']
         pot_pico = (tot * placa_sel['P_max']) / 1000
+        
         texto_solar = (f"Painel: {placa_sel['Modelo']} ({placa_sel['P_max']}W)\n"
                        f"Configuração: {arranjo_rec['strings']} Strings de {arranjo_rec['placas_por_string']} Placas\n"
                        f"Total de Módulos: {tot} unidades\n"
-                       f"Potência Total: {pot_pico:.2f} kWp\n"
-                       f"Fator de Dimensionamento: 2.5x Potência da Bomba")
+                       f"Potência Total: {pot_pico:.2f} kWp\n")
+        
+        if usa_booster:
+             texto_solar += "NOTA: Configuração com Booster Apollo (Economia de painéis)."
+        else:
+             texto_solar += "Fator de Dimensionamento: 2.5x Potência da Bomba"
+             
         pdf.chapter_body(texto_solar)
     
     # 4. Materiais
@@ -319,6 +323,11 @@ def gerar_pdf(nome_cliente, tel_cliente, email_cliente, bomba_dados, inversor, a
         pdf.cell(100, 8, f"Módulo {placa_sel['Modelo']}", 1)
         pdf.cell(30, 8, f"{arranjo_rec['total_placas']}", 1, 0, 'C')
         pdf.cell(60, 8, f"{placa_sel['P_max']}W", 1, 1)
+    
+    if usa_booster:
+        pdf.cell(100, 8, "Booster Apollo", 1)
+        pdf.cell(30, 8, "1", 1, 0, 'C')
+        pdf.cell(60, 8, "Elevador de Tensão", 1, 1)
         
     return pdf.output(dest='S').encode('latin-1')
 
@@ -337,7 +346,6 @@ except Exception as e:
 def salvar_lead(dados):
     if conn:
         try:
-            # FIX: TTL=5 forces fresh read from Sheets API to avoid overwriting old cache
             df_existente = conn.read(ttl=0)
             df_novo = pd.DataFrame([dados])
             df_final = pd.concat([df_existente, df_novo], ignore_index=True)
@@ -355,8 +363,20 @@ st.title("☀️ Sistema de Dimensionamento Solar - Apollo")
 st.markdown("Selecione o modelo da bomba e do painel conforme catálogo.")
 st.markdown("---")
 
-# --- 1. SELEÇÃO DA BOMBA ---
-st.subheader("1. Seleção da Bomba")
+# --- 1. DADOS DO CLIENTE (MOVIDO PARA O TOPO) ---
+st.markdown("### 1. Dados do Cliente")
+cc1, cc2, cc3 = st.columns(3)
+with cc1:
+    nome_cliente = st.text_input("Nome do Cliente", key="cli_nome")
+with cc2:
+    tel_cliente = st.text_input("Telefone", key="cli_tel")
+with cc3:
+    email_cliente = st.text_input("Email", key="cli_email")
+
+st.markdown("---")
+
+# --- 2. SELEÇÃO DA BOMBA ---
+st.subheader("2. Seleção da Bomba")
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
@@ -389,9 +409,9 @@ if bomba_selecionada:
 with c4:
     corrente_bomba = st.number_input("Corrente Nominal (A)", value=corrente_padrao, step=0.1, format="%.2f")
 
-# --- 2. SELEÇÃO DO PAINEL ---
+# --- 3. SELEÇÃO DO PAINEL ---
 st.divider()
-st.subheader("2. Seleção do Painel Solar")
+st.subheader("3. Seleção do Painel Solar")
 cp1, cp2 = st.columns([1, 3])
 
 with cp1:
@@ -409,32 +429,50 @@ if 'calculou' not in st.session_state:
 st.divider()
 
 if st.button("🚀 Calcular Dimensionamento", use_container_width=True):
-    st.session_state['calculou'] = True
+    if not nome_cliente or not tel_cliente or not email_cliente:
+        st.error("⚠️ Por favor, preencha todos os dados do cliente (Nome, Telefone, Email) antes de calcular.")
+    else:
+        st.session_state['calculou'] = True
+        
+        # Salva o Lead assim que calcula com sucesso
+        if conn:
+            pot_bomba_kw = potencia_cv * 0.736
+            # Determina se usa booster (lógica simplificada para registro)
+            usa_booster_reg = False
+            if tensao_bomba == "220V" and corrente_bomba <= 6.0:
+                usa_booster_reg = True
+            
+            lead_data = {
+                "Data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Cliente": nome_cliente,
+                "Telefone": tel_cliente,
+                "Email": email_cliente,
+                "Bomba_CV": potencia_cv,
+                "Tensao": tensao_bomba,
+                "Booster": "SIM" if usa_booster_reg else "NAO"
+            }
+            salvar_lead(lead_data)
 
 if st.session_state['calculou']:
     
     potencia_bomba_kw = potencia_cv * 0.736
     corrente_com_folga = corrente_bomba * 1.10
     
-    # === LÓGICA DE INVERSORES (AJUSTADA) ===
+    # === LÓGICA DE INVERSORES ===
     aviso_adaptacao = False
     
     if tensao_bomba == "220V":
         if potencia_bomba_kw <= 2.2:
-            # Até 2.2kW usa linha 220V nativa (SS2)
             df_filtrado = df_inversores[df_inversores['Tensao'] == '220V'].copy()
         else:
-            # Acima de 2.2kW usa linha 380V (Série 4) adaptada pela corrente
             df_filtrado = df_inversores[df_inversores['Tensao'] == '380V'].copy()
             aviso_adaptacao = True
     else:
-        # 380V padrão
         df_filtrado = df_inversores[df_inversores['Tensao'] == '380V'].copy()
     
     if df_filtrado.empty:
          st.error("Erro no banco de dados de inversores.")
     else:
-        # Busca pelo inversor que atende a potência E a corrente
         inversores = df_filtrado[
             (df_filtrado['Potencia_KW'] >= potencia_bomba_kw) &
             (df_filtrado['Corrente_Nominal_A'] >= corrente_com_folga)
@@ -446,12 +484,26 @@ if st.session_state['calculou']:
         else:
             inversor_eleito = inversores.iloc[0]
             
-            # Cálculo Solar
-            pot_min_w = (potencia_bomba_kw * 1000) * 1.5
-            pot_rec_w = (potencia_bomba_kw * 1000) * 2.5
+            # === LÓGICA DO BOOSTER (220V <= 6A) ===
+            usa_booster = False
             
-            arranjo_min = calcular_arranjo_otimizado(pot_min_w, tensao_bomba, painel_sel)
-            arranjo_rec = calcular_arranjo_otimizado(pot_rec_w, tensao_bomba, painel_sel)
+            if tensao_bomba == "220V" and corrente_bomba <= 6.0:
+                usa_booster = True
+                # Sobrescreve o arranjo recomendado para fixo 4 placas
+                arranjo_rec = {
+                    'strings': 1,
+                    'placas_por_string': 4,
+                    'total_placas': 4
+                }
+                # Mínimo também vira 4 para consistência
+                arranjo_min = arranjo_rec
+            else:
+                # Cálculo Solar Padrão
+                pot_min_w = (potencia_bomba_kw * 1000) * 1.5
+                pot_rec_w = (potencia_bomba_kw * 1000) * 2.5
+                
+                arranjo_min = calcular_arranjo_otimizado(pot_min_w, tensao_bomba, painel_sel)
+                arranjo_rec = calcular_arranjo_otimizado(pot_rec_w, tensao_bomba, painel_sel)
             
             # --- RESULTADOS ---
             st.success(f"✅ Sistema Apollo Dimensionado!")
@@ -465,57 +517,39 @@ if st.session_state['calculou']:
                 st.caption(f"Considerando folga de 10% ({corrente_com_folga:.2f}A)")
                 
                 if aviso_adaptacao:
-                    st.warning("ℹ️ Inversor 380V selecionado para bomba de alta potência em 220V. Requer parametrização de tensão de saída.")
+                    st.warning("ℹ️ Inversor 380V selecionado para bomba de alta potência em 220V. Requer parametrização.")
             
             with col_res2:
-                st.markdown("### ☀️ Mínimo (1.5x)")
-                if arranjo_min:
-                    tot_min = arranjo_min['total_placas']
-                    st.write(f"**{tot_min}x Painéis** ({arranjo_min['strings']} strings de {arranjo_min['placas_por_string']})")
-                
-                st.markdown("### 🌟 Recomendado (2.5x)")
-                if arranjo_rec:
-                    tot_rec = arranjo_rec['total_placas']
-                    st.write(f"**{tot_rec}x Painéis** ({arranjo_rec['strings']} strings de {arranjo_rec['placas_por_string']})")
+                if usa_booster:
+                    st.markdown("### 🚀 Sistema com Booster Apollo")
+                    st.info("**Configuração Especial (Bombas < 6A):**")
+                    st.write(f"**4x Painéis** (1 string de 4)")
+                    st.write(f"**1x Booster Apollo**")
+                    st.caption("Permite reduzir a quantidade de placas para bombas pequenas.")
+                else:
+                    st.markdown("### ☀️ Mínimo (1.5x)")
+                    if arranjo_min:
+                        tot_min = arranjo_min['total_placas']
+                        st.write(f"**{tot_min}x Painéis** ({arranjo_min['strings']} strings de {arranjo_min['placas_por_string']})")
+                    
+                    st.markdown("### 🌟 Recomendado (2.5x)")
+                    if arranjo_rec:
+                        tot_rec = arranjo_rec['total_placas']
+                        st.write(f"**{tot_rec}x Painéis** ({arranjo_rec['strings']} strings de {arranjo_rec['placas_por_string']})")
 
-            # --- LEAD E DOWNLOAD ---
+            # --- DOWNLOAD PDF ---
             st.divider()
-            st.markdown("### 👤 Dados do Cliente para Proposta")
             
-            cc1, cc2, cc3 = st.columns(3)
-            with cc1:
-                nome_cliente = st.text_input("Nome do Cliente", key="cli_nome")
-            with cc2:
-                tel_cliente = st.text_input("Telefone", key="cli_tel")
-            with cc3:
-                email_cliente = st.text_input("Email", key="cli_email")
-            
-            # Validação: Só mostra o botão se os campos estiverem preenchidos
-            if nome_cliente and tel_cliente and email_cliente:
-                if arranjo_rec:
-                    dados_bomba_pdf = {'Tipo': tipo_bomba, 'CV': potencia_cv, 'kW': potencia_bomba_kw, 'Tensao': tensao_bomba, 'Corrente': corrente_bomba}
-                    
-                    pdf_bytes = gerar_pdf(nome_cliente, tel_cliente, email_cliente, dados_bomba_pdf, inversor_eleito, arranjo_rec, painel_sel, aviso_adaptacao)
-                    
-                    btn = st.download_button(
-                        label="📄 Baixar Proposta em PDF",
-                        data=pdf_bytes,
-                        file_name=f"Proposta_Apollo_{nome_cliente.replace(' ','_') if nome_cliente else 'Cliente'}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                    
-                    if btn and conn:
-                        lead_data = {
-                            "Data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Cliente": nome_cliente,
-                            "Telefone": tel_cliente,
-                            "Email": email_cliente,
-                            "Bomba_CV": potencia_cv,
-                            "Inversor": inversor_eleito['Modelo'],
-                            "Placas": arranjo_rec['total_placas'],
-                            "Potencia_Pico_KW": (arranjo_rec['total_placas'] * painel_sel['P_max'])/1000
-                        }
-                        salvar_lead(lead_data)
-            else:
-                st.warning("⚠️ Preencha todos os dados do cliente (Nome, Telefone, Email) para gerar a proposta.")
+            if arranjo_rec:
+                dados_bomba_pdf = {'Tipo': tipo_bomba, 'CV': potencia_cv, 'kW': potencia_bomba_kw, 'Tensao': tensao_bomba, 'Corrente': corrente_bomba}
+                
+                # Gera PDF
+                pdf_bytes = gerar_pdf(nome_cliente, tel_cliente, email_cliente, dados_bomba_pdf, inversor_eleito, arranjo_rec, painel_sel, aviso_adaptacao, usa_booster)
+                
+                st.download_button(
+                    label="📄 Baixar Proposta em PDF",
+                    data=pdf_bytes,
+                    file_name=f"Proposta_Apollo_{nome_cliente.replace(' ','_') if nome_cliente else 'Cliente'}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
